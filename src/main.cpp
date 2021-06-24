@@ -58,6 +58,7 @@ void getRaw()
     doc["rows"] = size;
     doc["cols"] = size;
     doc["data"] = payload.c_str();
+    doc["temp"] = grideye.getDeviceTemperature();
 
     serializeJson(doc, output);
 }
