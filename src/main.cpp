@@ -20,7 +20,6 @@ String output;
 
 const char *sensor = "AMG8833";
 const int size = 8;
-const int nearest_neighbour_size = (size * 2) - 1;
 const int total_pixels = size * size;
 
 float pixels[total_pixels];
@@ -41,10 +40,10 @@ void getPixels()
 void getRaw()
 {
     String payload;
-    output = "";
+    String new_output;
+
     StaticJsonDocument<512> doc;
 
-    getPixels();
     for (unsigned char i = 0; i < total_pixels; i++)
     {
         payload = payload + pixels[i];
@@ -60,62 +59,8 @@ void getRaw()
     doc["data"] = payload.c_str();
     doc["temp"] = grideye.getDeviceTemperature();
 
-    serializeJson(doc, output);
-}
-
-void getNearestNeighbor()
-{
-    unsigned int i = 0;
-    unsigned int j = 0;
-    float nearestNeighbor[nearest_neighbour_size][nearest_neighbour_size];
-
-    StaticJsonDocument<2048> doc;
-    String payload;
-
-    getPixels();
-    output = "";
-
-    doc["sensor"] = sensor;
-    doc["rows"] = nearest_neighbour_size;
-    doc["cols"] = nearest_neighbour_size;
-
-    // Load the 8x8 data into the target matrix.
-    // Data from even numbered rows are loaded into positions 0,2,4,6,8,10,12,14
-    // Odd numbered rows remain empty.
-    for (unsigned int r = 0; r < size; r++)
-    {
-        for (unsigned int c = 0; c < size; c++)
-        {
-            nearestNeighbor[(r + j)][(c + i)] = pixels[(r * size) + c];
-            ++i;
-        }
-        i = 0;
-        j++;
-    }
-
-    // Fill in the blanks as the average of the nearest neighbours.
-    // e_map will hold the expanded matrix.  matrix holds the serialized data as a string.
-
-    for (unsigned int r = 0; r < nearest_neighbour_size; r++)
-    {
-        for (unsigned int c = 0; c < nearest_neighbour_size; c++)
-        {
-            if ((c % 2 != 0) && (c < (nearest_neighbour_size - 1)))
-            {
-                nearestNeighbor[r][c] = (float)((nearestNeighbor[r][c - 1] + nearestNeighbor[r][c + 1]) / 2);
-                payload = payload + nearestNeighbor[r][c] + ",";
-            }
-            if ((r % 2 != 0) && (r < (nearest_neighbour_size - 1)))
-            {
-                nearestNeighbor[r][c] = (float)((nearestNeighbor[r - 1][c] + nearestNeighbor[r + 1][c]) / 2);
-                payload = payload + nearestNeighbor[r][c] + ",";
-            }
-        }
-    }
-
-    doc["data"] = payload;
-
-    serializeJson(doc, output);
+    serializeJson(doc, new_output);
+    output = new_output;
 }
 
 void setup()
@@ -138,16 +83,7 @@ void setup()
     Serial.println(WiFi.localIP());
 
     server.on("/raw", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
-                  getRaw();
-                  request->send(200, "application/json", output.c_str());
-              });
-
-    server.on("/neighbor", HTTP_GET, [](AsyncWebServerRequest *request)
-              {
-                  getNearestNeighbor();
-                  request->send(200, "application/json", output.c_str());
-              });
+              { request->send(200, "application/json", output.c_str()); });
 
     server.onNotFound(notFound);
 
@@ -156,6 +92,7 @@ void setup()
 
 void loop()
 {
-    // toss in a delay because we don't need to run all out
-    //delay(100);
+    getPixels();
+    getRaw();
+    delay(100);
 }
