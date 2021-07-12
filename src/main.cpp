@@ -1,20 +1,19 @@
-#include <Arduino.h>
-#ifdef ESP32
-#include <WiFi.h>
-#include <AsyncTCP.h>
-#elif defined(ESP8266)
-#include <ESP8266WiFi.h>
-#include <ESPAsyncTCP.h>
-#endif
-#include <ESPAsyncWebServer.h>
+#include <ESP8266WebServer.h>
 #include <SparkFun_GridEYE_Arduino_Library.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
-#include <secrets.h>
+#include <WiFiManager.h>
+
+#define ESP8266_DRD_USE_RTC false
+#define ESP_DRD_USE_LITTLEFS true
+#define DOUBLERESETDETECTOR_DEBUG false
+
+#include <ESP_DoubleResetDetector.h>
 
 GridEYE grideye;
 
-AsyncWebServer server(80);
+ESP8266WebServer server(80);
+DoubleResetDetector *drd;
 
 String output;
 
@@ -24,9 +23,9 @@ const int total_pixels = size * size;
 
 float pixels[total_pixels];
 
-void notFound(AsyncWebServerRequest *request)
+void notFound()
 {
-    request->send(404, "text/plain", "Not found");
+    server.send(404, "text/plain", "Not found");
 }
 
 void getPixels()
@@ -63,36 +62,66 @@ void getRaw()
     output = new_output;
 }
 
+void sendRaw()
+{
+    server.send(200, "application/json", output.c_str());
+}
+
 void setup()
 {
     Serial.begin(9600);
 
-    Wire.begin();
-    // Library assumes "Wire" for I2C but you can pass something else with begin() if you like
-    grideye.begin();
-
     WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    if (WiFi.waitForConnectResult() != WL_CONNECTED)
+
+    WiFiManager wm;
+
+    drd = new DoubleResetDetector(10, 2);
+
+    if (drd->detectDoubleReset())
     {
-        Serial.printf("WiFi Failed!\n");
-        return;
+        Serial.println("Double reset detected");
+        wm.resetSettings();
     }
 
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
+    bool res;
+    res = wm.autoConnect("thermalvision");
 
-    server.on("/raw", HTTP_GET, [](AsyncWebServerRequest *request)
-              { request->send(200, "application/json", output.c_str()); });
+    if (!res)
+    {
+        Serial.println("Failed to connect");
+        ESP.restart();
+    }
+    else
+    {
+        Wire.begin();
+        // Library assumes "Wire" for I2C but you can pass something else with begin() if you like
+        grideye.begin();
 
-    server.onNotFound(notFound);
+        Serial.print("IP Address: ");
+        Serial.println(WiFi.localIP());
 
-    server.begin();
+        while (WiFi.status() != WL_CONNECTED)
+        {
+            delay(500);
+            Serial.print(".");
+        }
+        server.on("/raw", sendRaw);
+
+        server.onNotFound(notFound);
+
+        server.begin();
+        Serial.println("HTTP Server started");
+    }
 }
 
 void loop()
 {
-    getPixels();
-    getRaw();
-    delay(100);
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        getPixels();
+        getRaw();
+        delay(100);
+        server.handleClient();
+    }
+    drd->loop();
 }
