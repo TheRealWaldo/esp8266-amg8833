@@ -43,20 +43,51 @@ void getRaw()
 
     StaticJsonDocument<512> doc;
 
+    float pixel_temperature;
+    float min = 0;
+    float max = 0;
+    float avg = 0;
+    unsigned char local_min_index = 0;
+    unsigned char local_max_index = 0;
+
     for (unsigned char i = 0; i < total_pixels; i++)
     {
-        payload = payload + pixels[i];
+        pixel_temperature = pixels[i];
+        if (i == 0 || pixel_temperature > max)
+        {
+            max = pixel_temperature;
+            local_max_index = i;
+        }
+        if (i == 0 || pixel_temperature < min)
+        {
+            min = pixel_temperature;
+            local_min_index = i;
+        }
+        avg += pixel_temperature;
+        payload = payload + pixel_temperature;
+
         if (i < total_pixels - 1)
         {
             payload = payload + ",";
         }
     }
 
+    avg = avg / total_pixels;
     doc["sensor"] = sensor;
     doc["rows"] = size;
     doc["cols"] = size;
     doc["data"] = payload.c_str();
     doc["temp"] = grideye.getDeviceTemperature();
+    doc["min"] = min;
+    doc["max"] = max;
+    doc["avg"] = avg;
+    doc["min_index"] = local_min_index;
+    doc["max_index"] = local_max_index;
+    doc["overflow"] = grideye.pixelTemperatureOutputOK();
+    doc["movingAverageEnabled"] = grideye.movingAverageEnabled();
+    doc["interruptPinEnabled"] = grideye.interruptPinEnabled();
+    doc["10fps"] = grideye.isFramerate10FPS();
+    doc["person_detected"] = max - min > 4;
 
     serializeJson(doc, new_output);
     output = new_output;
@@ -96,6 +127,8 @@ void setup()
         Wire.begin();
         // Library assumes "Wire" for I2C but you can pass something else with begin() if you like
         grideye.begin();
+        delay(100);
+        grideye.setFramerate10FPS();
 
         Serial.print("IP Address: ");
         Serial.println(WiFi.localIP());
