@@ -129,6 +129,8 @@ void setup()
         grideye.begin();
         delay(100);
         grideye.setFramerate10FPS();
+        grideye.clearAllOverflow();
+        grideye.clearAllStatusFlags();
 
         Serial.print("IP Address: ");
         Serial.println(WiFi.localIP());
