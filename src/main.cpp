@@ -83,7 +83,7 @@ void getRaw()
     doc["avg"] = avg;
     doc["min_index"] = local_min_index;
     doc["max_index"] = local_max_index;
-    doc["overflow"] = grideye.pixelTemperatureOutputOK();
+    doc["overflow"] = !grideye.pixelTemperatureOutputOK();
     doc["movingAverageEnabled"] = grideye.movingAverageEnabled();
     doc["interruptPinEnabled"] = grideye.interruptPinEnabled();
     doc["10fps"] = grideye.isFramerate10FPS();
