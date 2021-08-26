@@ -95,6 +95,8 @@ void getRaw()
 
 void sendRaw()
 {
+    getPixels();
+    getRaw();
     server.send(200, "application/json", output.c_str());
 }
 
@@ -153,8 +155,6 @@ void loop()
 {
     if (WiFi.status() == WL_CONNECTED)
     {
-        getPixels();
-        getRaw();
         delay(100);
         server.handleClient();
     }
